@@ -63,3 +63,7 @@ Imgur отдаёт `.gifv` как HTML-страницу с `<video>`-тегом 
 ## Секреты
 
 `BOT_TOKEN` лежит только в GitHub Secrets (`Settings → Secrets and variables → Actions`). В коде — `os.getenv("BOT_TOKEN")`. Не логируем, в файлы не пишем.
+
+## Авторство коммитов
+
+Workflow коммитит `state.json` от имени владельца репо (`XXX1694`), используя GitHub noreply email — чтобы коммиты шли в граф контрибьюций без утечки личной почты. Коммиты будут помечены *Unverified* (без GPG-подписи), но на статистику вкладов это не влияет.
