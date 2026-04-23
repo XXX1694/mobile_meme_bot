@@ -24,6 +24,7 @@ SUBS = [
 ]
 
 IMAGE_EXT = (".jpg", ".jpeg", ".png", ".gif", ".gifv")
+MIN_UPS = 300  # порог апвоутов — отсекает слабые посты, оставляет реальные мемы
 STATE_PATH = Path(__file__).parent / "state.json"
 
 
@@ -43,8 +44,10 @@ async def fetch_sub(session: aiohttp.ClientSession, sub: str) -> list[dict]:
 
 
 def is_image_meme(post: dict) -> bool:
-    """API возвращает только картинки; дополнительно режем NSFW/spoiler и не-картиночные ссылки."""
+    """Режем NSFW/spoiler, не-картинки и слабые посты (<MIN_UPS апвоутов)."""
     if post.get("nsfw") or post.get("spoiler"):
+        return False
+    if post.get("ups", 0) < MIN_UPS:
         return False
     url = (post.get("url") or "").lower()
     return url.endswith(IMAGE_EXT)
