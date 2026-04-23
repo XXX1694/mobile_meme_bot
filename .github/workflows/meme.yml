@@ -1,0 +1,44 @@
+name: daily meme
+
+on:
+  schedule:
+    - cron: "0 10 * * *"  # 13:00 Almaty
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: meme-state
+  cancel-in-progress: false
+
+jobs:
+  post:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Install deps
+        run: pip install -r requirements.txt
+
+      - name: Post meme
+        env:
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+        run: python bot.py
+
+      - name: Commit state
+        run: |
+          git config user.name "meme-bot"
+          git config user.email "meme-bot@users.noreply.github.com"
+          git add state.json
+          if git diff --cached --quiet; then
+            echo "нет изменений в state.json"
+            exit 0
+          fi
+          git commit -m "chore: update meme state"
+          git pull --rebase --autostash origin main
+          git push origin HEAD:main
