@@ -2,7 +2,8 @@ name: daily meme
 
 on:
   schedule:
-    - cron: "0 10 * * *"  # 13:00 Almaty
+    - cron: "0 10 * * *"  # утренний пост
+    - cron: "0 15 * * *"  # дневной пост (через 5 часов)
   workflow_dispatch:
 
 permissions:
