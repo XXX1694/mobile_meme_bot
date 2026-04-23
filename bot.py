@@ -13,7 +13,7 @@ from aiogram import Bot
 CHAT_ID = -1003554574954
 TOPIC_ID = 352
 BOT_TOKEN = os.getenv("BOT_TOKEN")
-REDDIT_UA = "it_meme_bot/1.0 by u/kbtumobile_bot"
+USER_AGENT = "it_meme_bot/1.0"
 
 SUBS = [
     "ProgrammerHumor",
@@ -28,32 +28,31 @@ STATE_PATH = Path(__file__).parent / "state.json"
 
 
 async def fetch_sub(session: aiohttp.ClientSession, sub: str) -> list[dict]:
-    """Скачиваем hot конкретного сабреддита. Ошибки/таймауты — пустой список."""
-    url = f"https://www.reddit.com/r/{sub}/hot.json?limit=50"
+    """Тянем через meme-api.com (прокси над Reddit — обход 403 с облачных IP)."""
+    url = f"https://meme-api.com/gimme/{sub}/50"
     try:
         async with session.get(url, timeout=aiohttp.ClientTimeout(total=10)) as resp:
             if resp.status != 200:
                 print(f"[warn] r/{sub} вернул {resp.status}", file=sys.stderr)
                 return []
             data = await resp.json()
-            return [c["data"] for c in data.get("data", {}).get("children", [])]
+            return data.get("memes") or []
     except Exception as exc:
         print(f"[warn] r/{sub}: {exc}", file=sys.stderr)
         return []
 
 
 def is_image_meme(post: dict) -> bool:
-    """Отсеиваем видео/NSFW/закреп; оставляем только картинки."""
-    if post.get("stickied") or post.get("over_18") or post.get("is_video"):
+    """API возвращает только картинки; дополнительно режем NSFW/spoiler и не-картиночные ссылки."""
+    if post.get("nsfw") or post.get("spoiler"):
         return False
-    if post.get("post_hint") == "image":
-        return True
     url = (post.get("url") or "").lower()
     return url.endswith(IMAGE_EXT)
 
 
 def post_hash(post: dict) -> str:
-    return hashlib.md5(post["id"].encode()).hexdigest()[:10]
+    # в ответе meme-api нет post.id — хэшим url (уникален и стабилен)
+    return hashlib.md5(post["url"].encode()).hexdigest()[:10]
 
 
 def load_state() -> dict:
@@ -71,7 +70,7 @@ async def main() -> None:
         print("BOT_TOKEN не задан", file=sys.stderr)
         sys.exit(1)
 
-    async with aiohttp.ClientSession(headers={"User-Agent": REDDIT_UA}) as session:
+    async with aiohttp.ClientSession(headers={"User-Agent": USER_AGENT}) as session:
         results = await asyncio.gather(*(fetch_sub(session, s) for s in SUBS))
 
     all_posts = [p for sub_posts in results for p in sub_posts]
@@ -102,7 +101,7 @@ async def main() -> None:
     if url.endswith(".gifv"):
         url = url[:-1]  # imgur .gifv → .gif
     title = post["title"][:900]
-    caption = f"{title}\n\nr/{post['subreddit']} · reddit.com{post['permalink']}"
+    caption = f"{title}\n\nr/{post['subreddit']} · {post['postLink']}"
 
     bot = Bot(token=BOT_TOKEN)
     try:
