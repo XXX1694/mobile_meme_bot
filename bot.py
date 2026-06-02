@@ -15,16 +15,18 @@ TOPIC_ID = 352
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 USER_AGENT = "it_meme_bot/1.0"
 
+# Оставлены только широко-смешные сабы с высокой базой апвоутов.
+# Убраны: softwaregore и techhumor (в hot почти никогда нет постов >=MIN_UPS —
+# не проходили фильтр вообще), ProgrammerAnimemes (нишевой anime-контент
+# численно доминировал в пуле кандидатов). Чтобы вернуть — допиши сюда.
 SUBS = [
     "ProgrammerHumor",
     "programmingmemes",
-    "techhumor",
-    "softwaregore",
-    "ProgrammerAnimemes",
 ]
 
 IMAGE_EXT = (".jpg", ".jpeg", ".png", ".gif", ".gifv")
 MIN_UPS = 500  # порог апвоутов — отсекает слабые посты, оставляет реальные мемы
+CAPTION_LIMIT = 1024  # лимит Telegram на длину caption
 STATE_PATH = Path(__file__).parent / "state.json"
 
 
@@ -95,7 +97,11 @@ async def main() -> None:
         print("после фильтра 0 картинок — прерываемся", file=sys.stderr)
         sys.exit(1)
 
-    post = random.choice(candidates)
+    # Взвешиваем выбор по апвоутам: чем популярнее мем, тем выше шанс, что
+    # выберут именно его. Раньше был random.choice — вирусный мем (40k ups)
+    # имел тот же шанс, что и проходной (501 ups), и постился в основном середняк.
+    weights = [max(p.get("ups", 0), 1) for p in candidates]
+    post = random.choices(candidates, weights=weights, k=1)[0]
     seen.add(post_hash(post))
     state["seen"] = sorted(seen)
     save_state(state)
@@ -103,8 +109,14 @@ async def main() -> None:
     url = post["url"]
     if url.endswith(".gifv"):
         url = url[:-1]  # imgur .gifv → .gif
-    title = post["title"][:900]
-    caption = f"{title}\n\nr/{post['subreddit']} · {post['postLink']}"
+    # Бюджетируем title под фактический хвост, чтобы caption не превысил лимит
+    # Telegram (иначе send_photo вернёт 400 и бот упадёт). postLink бывает ~150 симв.
+    tail = f"\n\nr/{post['subreddit']} · {post['postLink']}"
+    max_title = CAPTION_LIMIT - len(tail)
+    title = post["title"]
+    if len(title) > max_title:
+        title = title[: max_title - 1] + "…"
+    caption = f"{title}{tail}"
 
     bot = Bot(token=BOT_TOKEN)
     try:
